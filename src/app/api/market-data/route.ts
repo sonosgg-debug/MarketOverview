@@ -45,6 +45,13 @@ const TICKERS = [
   { id: '37', name: '키옥시아', ticker: '285A.T' },
   { id: '38', name: '무라타', ticker: '6981.T' },
   { id: '39', name: 'CXMT', ticker: '688825.SS' },
+  { id: '40', name: '금(GOLD) 가격', ticker: 'GC=F' },
+  { id: '41', name: '애플(AAPL)', ticker: 'AAPL' },
+  { id: '42', name: '마이크로소프트(MSFT)', ticker: 'MSFT' },
+  { id: '43', name: '구글(GOOGL)', ticker: 'GOOGL' },
+  { id: '44', name: '아마존(AMZN)', ticker: 'AMZN' },
+  { id: '45', name: '메타(META)', ticker: 'META' },
+  { id: '46', name: '테슬라(TSLA)', ticker: 'TSLA' },
 ];
 
 async function getFearAndGreed() {
