@@ -52,6 +52,7 @@ const TICKERS = [
   { id: '44', name: '아마존(AMZN)', ticker: 'AMZN' },
   { id: '45', name: '메타(META)', ticker: 'META' },
   { id: '46', name: '테슬라(TSLA)', ticker: 'TSLA' },
+  { id: '47', name: '스페이스X(SPCX)', ticker: 'SPCX' },
 ];
 
 async function getFearAndGreed() {

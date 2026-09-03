@@ -10,7 +10,7 @@ const CATEGORIES = ["US Market", "K Market", "Semiconductor"];
 
 const US_MARKET_TICKERS = [
   '^GSPC', '^IXIC', '^TNX', 'CL=F', 'DX-Y.NYB', 'KRW=X', 'EWY', 'BTC-USD', 'GC=F', '^VIX', 'FEAR_GREED',
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA'
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'META', 'TSLA', 'SPCX'
 ];
 const K_MARKET_TICKERS = [
   '^KS11', '^KQ11', 'KOSPI200_FUTURES', 'KOSPI_PER', 'KOSPI_PBR', 'KOSPI_RSI', 'ADR_INFO', 'KOSPI_TRADE_VALUE',
