@@ -34,7 +34,7 @@ const TICKERS = [
   { id: '25', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
   { id: '26', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
   { id: '27', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT' },
-  { id: '48', name: '코스피 200 변동성지수', ticker: 'VKOSPI', negativeFavorable: true },
+  { id: '48', name: 'KOSPI200 변동성지수', ticker: 'VKOSPI', negativeFavorable: true },
   { id: '31', name: '삼성전자', ticker: '005930.KS' },
   { id: '32', name: '삼성전기', ticker: '009150.KS' },
   { id: '33', name: 'SK스퀘어', ticker: '402340.KS' },
