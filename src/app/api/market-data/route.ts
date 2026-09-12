@@ -34,6 +34,7 @@ const TICKERS = [
   { id: '25', name: '신용공여 잔고 (단위:억원)', ticker: 'CREDIT_BALANCE' },
   { id: '26', name: '반대매매금액 (단위:억원)', ticker: 'MARGIN_CALL', negativeFavorable: true },
   { id: '27', name: 'KOSPI200 야간 선물 지수', ticker: 'KOSPI200_NIGHT' },
+  { id: '48', name: '코스피 200 변동성지수', ticker: 'VKOSPI', negativeFavorable: true },
   { id: '31', name: '삼성전자', ticker: '005930.KS' },
   { id: '32', name: '삼성전기', ticker: '009150.KS' },
   { id: '33', name: 'SK스퀘어', ticker: '402340.KS' },
@@ -197,7 +198,8 @@ export async function GET() {
         const isKrxCacheIndicator = [
           'KOSPI200_NIGHT', 'KOSPI200_FUTURES', 'KOSPI_RSI', 'ADR_INFO',
           'KOSPI_PER', 'KOSPI_PBR', 'KOSPI_TRADE_VALUE',
-          'CUSTOMER_DEPOSITS', 'CREDIT_BALANCE', 'MARGIN_CALL'
+          'CUSTOMER_DEPOSITS', 'CREDIT_BALANCE', 'MARGIN_CALL',
+          'VKOSPI'
         ].includes(item.ticker);
 
         if (isKrxCacheIndicator) {
@@ -206,7 +208,18 @@ export async function GET() {
           dataRow.isStale = false;
         }
 
-        if (item.ticker === 'KOSPI200_NIGHT') {
+        if (item.ticker === 'VKOSPI') {
+          if (krxData && krxData.vkospi) {
+            dataRow.price = krxData.vkospi.price;
+            dataRow.changeAmt = krxData.vkospi.changeAmt;
+            dataRow.changePercent = krxData.vkospi.changePercent;
+            dataRow.history = krxData.vkospi.history;
+            dataRow.open = krxData.vkospi.open ?? null;
+            dataRow.high = krxData.vkospi.high ?? null;
+            dataRow.low = krxData.vkospi.low ?? null;
+            dataRow.close = krxData.vkospi.close ?? null;
+          }
+        } else if (item.ticker === 'KOSPI200_NIGHT') {
           if (krxData && krxData.kospi200_night) {
             dataRow.price = krxData.kospi200_night.price;
             dataRow.changeAmt = krxData.kospi200_night.changeAmt;

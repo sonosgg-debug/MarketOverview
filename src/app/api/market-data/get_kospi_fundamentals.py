@@ -31,6 +31,7 @@ if os.path.exists(krx_env_path):
 
 try:
     from pykrx import stock
+    from pykrx.website.krx.krxio import KrxWebIo
 except ImportError:
     print(json.dumps({"error": "pykrx is not installed"}))
     sys.exit(1)
@@ -43,7 +44,8 @@ if "--batch" in sys.argv:
 def format_iso_date(date_str):
     # Convert 'YYYY-MM-DD' or datetime to 'YYYY-MM-DDT00:00:00.000Z'
     if isinstance(date_str, str):
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        clean_date = date_str.replace('/', '-')
+        dt = datetime.strptime(clean_date, "%Y-%m-%d")
     else:
         dt = date_str
     return dt.strftime("%Y-%m-%dT00:00:00.000Z")
@@ -377,6 +379,62 @@ def task_fundamentals(start_date, end_date):
                 }
     except Exception as e:
         print(f"Error in task_fundamentals: {e}", file=sys.stderr)
+    return result
+
+class KrxMdc(KrxWebIo):
+    @property
+    def bld(self):
+        return 'dbms/MDC/STAT/standard/MDCSTAT01201'
+
+def task_vkospi(start_date, end_date):
+    result = {}
+    try:
+        krx = KrxMdc()
+        res = krx.read(
+            locale='ko_KR',
+            indTpCd='1',
+            idxIndCd='300',
+            strtDd=start_date,
+            endDd=end_date,
+            share='1',
+            money='1'
+        )
+        output = res.get('output', [])
+        if output and len(output) >= 2:
+            latest = output[0]
+            prev = output[1]
+            
+            price = round(float(str(latest['CLSPRC_IDX']).replace(',', '')), 2)
+            prev_price = round(float(str(prev['CLSPRC_IDX']).replace(',', '')), 2)
+            change = round(price - prev_price, 2)
+            pct = round((change / prev_price) * 100, 2) if prev_price != 0 else 0.0
+            
+            open_p = round(float(str(latest.get('OPNPRC_IDX', price)).replace(',', '')), 2)
+            high_p = round(float(str(latest.get('HGPRC_IDX', price)).replace(',', '')), 2)
+            low_p = round(float(str(latest.get('LWPRC_IDX', price)).replace(',', '')), 2)
+            close_p = price
+            
+            chronological = list(reversed(output))[-60:]
+            history = [
+                {
+                    "date": format_iso_date(row['TRD_DD']),
+                    "value": round(float(str(row['CLSPRC_IDX']).replace(',', '')), 2)
+                }
+                for row in chronological
+            ]
+            
+            result["vkospi"] = {
+                "price": price,
+                "changeAmt": change,
+                "changePercent": pct,
+                "history": history,
+                "open": open_p,
+                "high": high_p,
+                "low": low_p,
+                "close": close_p
+            }
+    except Exception as e:
+        print(f"Error in task_vkospi: {e}", file=sys.stderr)
     return result
 
 def task_ohlcv_rsi(start_date, end_date):
@@ -751,12 +809,13 @@ def main():
         result = {}
         
         # Parallel Execution using ThreadPoolExecutor
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            # 1. Run KOFIA Preload, Naver Futures, fundamentals, and ohlcv in parallel
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            # 1. Run KOFIA Preload, Naver Futures, fundamentals, ohlcv, and vkospi in parallel
             future_preload = executor.submit(task_kofia_preload)
             future_futures = executor.submit(get_naver_futures)
             future_fundamentals = executor.submit(task_fundamentals, start_date, end_date)
             future_ohlcv_rsi = executor.submit(task_ohlcv_rsi, start_date, end_date)
+            future_vkospi = executor.submit(task_vkospi, start_date, end_date)
             
             # Wait for KOFIA preload to finish before executing task_local_kofia_adr
             future_preload.result()
@@ -783,6 +842,12 @@ def main():
                 result.update(ohlcv_data)
             except Exception as e:
                 print(f"Error fetching ohlcv in thread: {e}", file=sys.stderr)
+                
+            try:
+                vkospi_data = future_vkospi.result()
+                result.update(vkospi_data)
+            except Exception as e:
+                print(f"Error fetching vkospi in thread: {e}", file=sys.stderr)
                 
             try:
                 local_data = future_local.result()
