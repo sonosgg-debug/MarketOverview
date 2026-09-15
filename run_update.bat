@@ -1,5 +1,5 @@
 @echo off
-cd /d "D:\AI Investing\MarketSignal"
+cd /d "%~dp0"
 
 echo [1/2] Running data scraper and updating cache...
 python "src/app/api/market-data/get_kospi_fundamentals.py" --batch

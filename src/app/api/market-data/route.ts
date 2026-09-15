@@ -19,6 +19,7 @@ const TICKERS = [
   { id: '10', name: '마이크론(MU)', ticker: 'MU' },
   { id: '11', name: '샌디스크(SNDK)', ticker: 'SNDK' },
   { id: '12', name: 'DRAM (Roundhill ETF)', ticker: 'DRAM' },
+  { id: '49', name: 'CCML (Roundhill ETF)', ticker: 'CCML' },
   { id: '13', name: '비트코인(BTC-USD) 가격', ticker: 'BTC-USD' },
   { id: '14', name: 'CBOE VIX', ticker: '^VIX', negativeFavorable: true },
   { id: '15', name: 'CNN Fear & Greed Index', ticker: 'FEAR_GREED' },
