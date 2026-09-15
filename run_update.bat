@@ -1,0 +1,47 @@
+@echo off
+cd /d "%~dp0"
+
+echo [1/2] Running data scraper and updating cache...
+python "src/app/api/market-data/get_kospi_fundamentals.py" --batch
+if errorlevel 1 (
+    echo.
+    echo ERROR: Python data scraper failed with exit code %errorlevel%.
+    echo Skipping cache update and Git push.
+    goto end
+)
+
+echo.
+echo [2/2] Pushing updated cache to GitHub...
+git add src/app/api/market-data/krx_cache.json
+git diff --cached --quiet
+if errorlevel 1 (
+    echo New cache data detected. Committing and pushing...
+    git commit -m "Auto-update KRX cache data"
+    echo Synchronizing with remote repository...
+    git pull --rebase origin main
+    if errorlevel 1 (
+        echo.
+        echo ERROR: Failed to rebase with remote. Please resolve Git conflicts manually.
+        goto end
+    )
+    git push origin main
+    if errorlevel 1 (
+        echo.
+        echo ERROR: Git push failed. Please check remote repository status.
+        goto end
+    )
+) else (
+    echo No new cache data to update. Skipping commit/push.
+)
+
+echo.
+echo Process completed successfully!
+
+:end
+:: Pause only if the batch file was run by double-clicking in Explorer (so the window doesn't close immediately)
+echo %cmdcmdline% | find /i "cmd.exe /c" >nul
+if %errorlevel% == 0 (
+    echo.
+    echo Press any key to close...
+    pause >nul
+)
