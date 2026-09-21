@@ -2,7 +2,9 @@ import os
 import sys
 import json
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+KST = timezone(timedelta(hours=9))
 import concurrent.futures
 import requests
 from bs4 import BeautifulSoup
@@ -174,11 +176,11 @@ def get_naver_futures():
     df_60 = df.tail(60)
     history_list = [{"date": dt.strftime("%Y-%m-%dT00:00:00.000Z"), "value": round(float(row["Close"]), 2)} for dt, row in df_60.iterrows()]
     
-    # Fallback quote_date_str if none parsed (only on weekdays after 9am)
+    # Fallback quote_date_str if none parsed (only on weekdays after 9am KST)
     if quote_date_str is None:
-        now = datetime.now()
-        if now.weekday() < 5 and now.hour >= 9:
-            quote_date_str = now.strftime("%Y-%m-%d")
+        now_kst = datetime.now(KST)
+        if now_kst.weekday() < 5 and now_kst.hour >= 9:
+            quote_date_str = now_kst.strftime("%Y-%m-%d")
         else:
             quote_date_str = latest_hist_str
 
