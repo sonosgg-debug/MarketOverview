@@ -84,6 +84,49 @@ async function getFearAndGreed() {
   }
 }
 
+function getLatestExpectedTradingDay(refDate: Date = new Date()): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(refDate).reduce((acc: any, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  const hour = parseInt(parts.hour, 10);
+  const minute = parseInt(parts.minute, 10);
+  
+  const kstDate = new Date(`${parts.year}-${parts.month}-${parts.day}T12:00:00+09:00`);
+  const day = kstDate.getDay();
+
+  // If weekday and after 15:45 KST, today's close should be available
+  if (day >= 1 && day <= 5 && (hour > 15 || (hour === 15 && minute >= 45))) {
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  }
+
+  // Before 15:45 on weekday, or on weekend:
+  let daysBack = 1;
+  if (day === 1) daysBack = 3;      // Monday before 15:45 -> last Friday
+  else if (day === 0) daysBack = 2; // Sunday -> last Friday
+  else if (day === 6) daysBack = 1; // Saturday -> last Friday
+  else daysBack = 1;                // Tuesday-Friday before 15:45 -> yesterday
+
+  const prev = new Date(kstDate.getTime() - (daysBack * 86400000));
+  const prevParts = formatter.formatToParts(prev).reduce((acc: any, part) => {
+    acc[part.type] = part.value;
+    return acc;
+  }, {});
+
+  return `${prevParts.year}-${prevParts.month}-${prevParts.day}`;
+}
+
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
@@ -105,72 +148,82 @@ export async function GET() {
       console.error("Error reading KRX cache:", cacheErr);
     }
 
-    // Check if the KRX cache is stale
+    // Check if the KRX cache is stale and if synchronous wait is required
+    const expectedTradingDay = getLatestExpectedTradingDay();
     let isKrxStale = false;
-    try {
-      if (fs.existsSync(cachePath)) {
-        const stats = fs.statSync(cachePath);
-        const mtime = stats.mtime;
-        const now = new Date();
-        
-        // 1. If it's been more than 1 hour since the last update, consider it stale
-        const oneHour = 60 * 60 * 1000;
-        if (now.getTime() - mtime.getTime() > oneHour) {
-          isKrxStale = true;
-        }
+    let mustWait = false;
 
-        // 2. If it is a weekday after market close (16:00) but today's data is missing in the cache history, consider it stale
-        const dayOfWeek = now.getDay();
-        const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5;
-        const isAfterMarketClose = now.getHours() >= 16;
-        
-        if (isWeekday && isAfterMarketClose && krxData) {
-          const todayStr = now.toISOString().split('T')[0]; // "YYYY-MM-DD"
-          const perHistory = krxData.per?.history || [];
-          if (perHistory.length > 0) {
-            const lastDataDate = perHistory[perHistory.length - 1].date; // "YYYY-MM-DDT00:00:00.000Z"
-            const lastDataDateStr = lastDataDate.split('T')[0];
-            if (lastDataDateStr < todayStr) {
-              isKrxStale = true;
-            }
-          }
+    if (!krxData) {
+      isKrxStale = true;
+      mustWait = true;
+    } else {
+      const perHistory = krxData.per?.history || [];
+      if (perHistory.length > 0) {
+        const lastDataDate = perHistory[perHistory.length - 1].date; // "YYYY-MM-DDT00:00:00.000Z"
+        const lastDataDateStr = String(lastDataDate).split('T')[0];
+        if (lastDataDateStr < expectedTradingDay) {
+          isKrxStale = true;
+          mustWait = true; // Cache lacks expected trading day close; wait synchronously so client receives fresh data
         }
       } else {
         isKrxStale = true;
+        mustWait = true;
       }
-    } catch (err) {
-      console.error("Error determining KRX cache stale status:", err);
+
+      // Check if file is older than 4 hours for routine refresh
+      if (fs.existsSync(cachePath)) {
+        const stats = fs.statSync(cachePath);
+        const fourHours = 4 * 60 * 60 * 1000;
+        if (Date.now() - stats.mtime.getTime() > fourHours) {
+          isKrxStale = true;
+        }
+      }
     }
 
-    // Trigger asynchronous background update to keep the cache fresh for next time
-    try {
-      exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
-        if (stderr) {
-          console.error(`KRX background update python stderr: ${stderr}`);
-        }
-        if (!error && stdout) {
-          try {
-            const jsonStart = stdout.indexOf('{');
-            if (jsonStart !== -1) {
-              const parsed = JSON.parse(stdout.substring(jsonStart));
-              if (parsed && !parsed.error) {
-                fs.writeFileSync(cachePath, JSON.stringify(parsed, null, 2), 'utf-8');
-                console.log("KRX cache updated successfully in background.");
-              } else if (parsed && parsed.error) {
-                console.error("KRX background update script returned error:", parsed.error);
-              }
+    // Execute KRX update (Synchronously if mustWait, or asynchronously in background)
+    if (mustWait) {
+      try {
+        console.log(`KRX cache stale (expected >= ${expectedTradingDay}). Waiting synchronously for python update...`);
+        await new Promise<void>((resolve) => {
+          exec(`python "${scriptPath}"`, { timeout: 45000 }, (error, stdout, stderr) => {
+            if (error) {
+              console.error("KRX sync update error:", error, stderr);
             } else {
-              console.error("KRX background update did not output valid JSON:", stdout);
+              console.log("KRX sync update completed successfully.");
             }
-          } catch (e) {
-            console.error("Failed to parse KRX background update JSON:", e);
+            resolve();
+          });
+        });
+
+        // Re-read cache after update
+        if (fs.existsSync(cachePath)) {
+          const cacheContent = fs.readFileSync(cachePath, 'utf-8');
+          krxData = JSON.parse(cacheContent);
+          const perHistory = krxData.per?.history || [];
+          if (perHistory.length > 0) {
+            const lastDataDateStr = String(perHistory[perHistory.length - 1].date).split('T')[0];
+            if (lastDataDateStr >= expectedTradingDay) {
+              isKrxStale = false;
+            }
           }
-        } else if (error) {
-          console.error("Failed to execute KRX background update command error:", error);
         }
-      });
-    } catch (bgErr) {
-      console.error("Failed to start background KRX update:", bgErr);
+      } catch (syncErr) {
+        console.error("Error waiting for KRX sync update:", syncErr);
+      }
+    } else if (isKrxStale) {
+      // Trigger non-blocking background update to keep cache warm
+      try {
+        exec(`python "${scriptPath}"`, (error, stdout, stderr) => {
+          if (stderr) {
+            console.error(`KRX background update stderr: ${stderr}`);
+          }
+          if (!error) {
+            console.log("KRX background update completed successfully.");
+          }
+        });
+      } catch (bgErr) {
+        console.error("Failed to start background KRX update:", bgErr);
+      }
     }
 
     const endDate = new Date();
